@@ -2,16 +2,19 @@ import zipfile
 import os
 import argparse
 
-def pack_to_zip(source_path, output_filename):
+def pack_to_archive(source_path, output_filename):
     """
-    Packs a file or a directory into a .zip archive.
+    Packs a file or a directory into a .zip or .ipa archive.
     """
     if not os.path.exists(source_path):
         print(f"Error: Source path '{source_path}' does not exist.")
         return False
 
-    if not output_filename.endswith('.zip'):
+    # Support both .zip and .ipa extensions
+    ext = os.path.splitext(output_filename)[1].lower()
+    if ext not in ['.zip', '.ipa']:
         output_filename += '.zip'
+        print(f"Warning: No valid extension found. Defaulting to '{output_filename}'.")
 
     try:
         with zipfile.ZipFile(output_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -21,6 +24,8 @@ def pack_to_zip(source_path, output_filename):
                 for root, dirs, files in os.walk(source_path):
                     for file in files:
                         file_path = os.path.join(root, file)
+                        # Archive name should be relative to the directory containing source_path
+                        # so that the source_path directory itself is included in the archive.
                         arcname = os.path.relpath(file_path, start=os.path.dirname(source_path))
                         zipf.write(file_path, arcname)
         print(f"Successfully created '{output_filename}' from '{source_path}'.")
@@ -30,12 +35,12 @@ def pack_to_zip(source_path, output_filename):
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Pack files or directories into a .zip archive.")
+    parser = argparse.ArgumentParser(description="Pack files or directories into a .zip or .ipa archive.")
     parser.add_argument("source", help="Path to the file or directory to pack.")
-    parser.add_argument("output", help="Name of the output .zip file.")
+    parser.add_argument("output", help="Name of the output file (e.g., archive.zip or app.ipa).")
 
     args = parser.parse_args()
-    pack_to_zip(args.source, args.output)
+    pack_to_archive(args.source, args.output)
 
 if __name__ == "__main__":
     main()
