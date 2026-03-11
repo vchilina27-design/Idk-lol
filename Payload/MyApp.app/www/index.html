@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Tasko</title>
+
+  <!-- Tailwind CSS v3 CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary:   { DEFAULT: '#3b5de8', fg: '#ffffff' },
+            surface:   '#f3f5fb',
+            card:      '#ffffff',
+            border:    '#e4e8f5',
+            muted:     '#f0f2fa',
+            'muted-fg':'#8492b4',
+            'fg':      '#111827',
+            'fg-soft': '#4b5577',
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'Segoe UI', 'sans-serif'],
+          },
+          borderRadius: {
+            '2xl': '1rem',
+            '3xl': '1.5rem',
+            '4xl': '2rem',
+          },
+          boxShadow: {
+            card:  '0 2px 12px rgba(59,93,232,0.07)',
+            float: '0 8px 32px rgba(59,93,232,0.28)',
+          },
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    body { background: #f3f5fb; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif; }
+
+    /* Hide scrollbars but keep scroll */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* iOS safe area padding */
+    .safe-top    { padding-top:    env(safe-area-inset-top,    16px); }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
+
+    /* Smooth checkbox transition */
+    .task-title.done { text-decoration: line-through; color: #8492b4; }
+
+    /* Modal animation */
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .slide-up { animation: slideUp 0.28s cubic-bezier(0.32,0.72,0,1) both; }
+
+    /* Active press effect */
+    button:active { transform: scale(0.96); }
+    .no-active:active { transform: none; }
+
+    /* Progress bar transition */
+    #progress-bar { transition: width 0.6s ease; }
+
+    /* Checked circle color */
+    .check-icon { color: #3b5de8; }
+
+    /* Category pill colors */
+    .cat-work     { background: #dde6ff; color: #2b45b8; }
+    .cat-personal { background: #f0deff; color: #7b2fa8; }
+    .cat-health   { background: #d6f5e8; color: #1a7a4a; }
+    .cat-finance  { background: #fef3d0; color: #9a6200; }
+    .cat-learning { background: #d6edff; color: #1a5c8a; }
+
+    /* Priority dot colors */
+    .dot-high   { background: #e84040; }
+    .dot-medium { background: #e8a040; }
+    .dot-low    { background: #40c87a; }
+
+    /* Delete btn */
+    .delete-btn { opacity: 0; transition: opacity 0.15s; }
+    .task-row:hover .delete-btn,
+    .task-row:focus-within .delete-btn { opacity: 1; }
+
+    /* Tab active */
+    .tab-btn.active { background: #fff; color: #3b5de8; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+    /* Category filter active */
+    .cat-filter-btn.active { background: #3b5de8; color: #fff; border-color: #3b5de8; }
+
+    /* Overlay */
+    #modal-overlay { background: rgba(17,24,39,0.4); backdrop-filter: blur(4px); }
+
+    /* Input focus */
+    input:focus, select:focus { outline: none; border-color: #3b5de8; box-shadow: 0 0 0 3px rgba(59,93,232,0.15); }
+
+    /* Bottom nav active */
+    .nav-item.active span.nav-label { color: #3b5de8; }
+    .nav-item.active .nav-icon      { color: #3b5de8; }
+    .nav-item:not(.active)          { opacity: 0.45; }
+  </style>
+</head>
+<body class="bg-surface min-h-screen flex items-start justify-center">
+
+<div id="app" class="relative w-full max-w-sm min-h-screen flex flex-col overflow-hidden bg-surface">
+  <header id="header" class="relative px-5 pb-6 rounded-b-4xl overflow-hidden safe-top" style="background:#3b5de8;">
+    <div class="absolute -top-8 -right-8 w-36 h-36 rounded-full" style="background:rgba(255,255,255,0.12);" aria-hidden="true"></div>
+    <div class="relative flex items-center justify-between mb-5 pt-3">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-base flex-shrink-0 border-2 select-none" style="background:#5c78f0;border-color:rgba(255,255,255,0.35);color:#fff;">AJ</div>
+        <div>
+          <p class="text-xs font-medium tracking-widest uppercase" style="color:rgba(255,255,255,0.65);">Welcome back</p>
+          <p class="font-bold text-base leading-tight text-white">Alex Johnson</p>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="flex-1 overflow-y-auto no-scrollbar px-4 pt-5 pb-28">
+    <ul id="task-list" class="flex flex-col gap-2.5"></ul>
+  </main>
+</div>
+
+<script>
+  (function () {
+    const taskList = document.getElementById('task-list');
+    const tasks = [
+      { id: '1', title: 'Design IPA Container', completed: false, category: 'Work', priority: 'high' },
+      { id: '2', title: 'Add Mach-O binary', completed: true, category: 'Work', priority: 'medium' }
+    ];
+
+    function renderTasks() {
+      taskList.innerHTML = tasks.map(t => `
+        <li class="bg-white p-4 rounded-2xl shadow-sm border border-border">
+          <span class="font-semibold ${t.completed ? 'line-through text-gray-400' : ''}">${t.title}</span>
+        </li>
+      `).join('');
+    }
+    renderTasks();
+  })();
+</script>
+</body>
+</html>
