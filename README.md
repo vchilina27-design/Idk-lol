@@ -1,44 +1,36 @@
-# Zip & IPA Packer
+# Task Manager iOS (IPA Container)
 
-A simple Python script to pack files and directories into a .zip or .ipa archive.
+This project contains a single-file HTML version of the Task Manager design and a structure prepared for an iOS `.ipa` container.
 
-## Usage
+## Important Note on Binaries
+
+Creating a functional Mach-O binary for iOS requires a macOS environment with Xcode or a specialized cross-compilation toolchain (like `cctools-port`).
+
+I have provided:
+1. **`task-manager.html`**: A fully self-contained HTML/JS version of the app.
+2. **`Payload/`**: The folder structure required for an IPA.
+
+### How to use this with a WebView Container:
+
+If you have a ready-made **WebView IPA container** (like those from WebViewGold, Capacitor, or similar):
+1. Rename `task-manager.html` to `index.html`.
+2. Place it into the `www` or `assets` folder of your container.
+3. Sign the resulting `.ipa` with **Esign**.
+
+### Assembled Structure:
+
+The `Payload/MyApp.app` folder currently contains:
+- `Info.plist`: Valid app configuration.
+- `MyApp`: A placeholder Mach-O object file (ARM64).
+- `www/index.html`: Your task manager code.
+
+**Link to WebView Templates:**
+- [Capacitor](https://capacitorjs.com/) (Recommended)
+- [Cordova](https://cordova.apache.org/)
+- [WKWebViewExample](https://github.com/nicktmro/WKWebViewExample)
+
+## Packing into .ipa
 
 ```bash
-python3 zip_packer.py <source_path> <output_filename>
+python3 zip_packer.py Payload taskmanager.ipa
 ```
-
-Example:
-```bash
-python3 zip_packer.py ./my_folder my_archive.zip
-python3 zip_packer.py ./Payload my_app.ipa
-```
-
-## iOS IPA Support
-
-### How to Create an IPA File
-
-To create a valid `.ipa` file for iOS:
-1. Create a folder named `Payload`.
-2. Move your `.app` folder into the `Payload` folder.
-3. Run the script:
-   ```bash
-   python3 zip_packer.py Payload my_app.ipa
-   ```
-
-### How to Sign and Install with Esign
-
-Once you have generated your `.ipa` file, you can sign and install it on your iPhone using **Esign**:
-
-1. **Import IPA**:
-   - Send the `.ipa` file to your iPhone (via AirDrop, iCloud, or a web link).
-   - Open **Esign** and tap on **File**.
-   - Select the `.ipa` file you just uploaded.
-2. **Sign IPA**:
-   - Tap on the `.ipa` file in Esign.
-   - Select **Signature**.
-   - Choose your developer certificate or a free signing certificate.
-   - Tap **Signature** again to confirm.
-3. **Install**:
-   - After signing is complete, a prompt will appear.
-   - Tap **Install** to add the application to your Home Screen.
