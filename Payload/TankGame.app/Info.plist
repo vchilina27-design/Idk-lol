@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>MyApp</string>
+    <string>TankGame</string>
     <key>CFBundleIdentifier</key>
-    <string>com.user914.myapp</string>
+    <string>com.user914.tankgame</string>
     <key>CFBundleName</key>
-    <string>TaskMaster</string>
+    <string>TankBattle</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
     <key>CFBundlePackageType</key>
