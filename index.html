@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Tank Battle PC</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 10; pointer-events: none; }
+        .stat { font-size: 24px; margin-bottom: 5px; text-shadow: 2px 2px 4px #000; }
+        #instructions { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="stat">Score: <span id="score">0</span></div>
+        <div class="stat">Armor: <span id="armor">100</span>%</div>
+        <div class="stat">Team: <span id="team-count">1</span> | Enemies: <span id="enemy-count">1</span></div>
+    </div>
+    <div id="instructions">WASD to Move | SPACE to Fire | MOUSE to Look</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- GAME CONSTANTS ---
+        const WORLD_SIZE = 100;
+        const TANK_SPEED = 0.15;
+        const TANK_TURN_SPEED = 0.04;
+        const BULLET_SPEED = 0.6;
+
+        // --- SETUP SCENE ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111122);
+        scene.fog = new THREE.Fog(0x111122, 10, 150);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+        sunLight.position.set(50, 100, 50);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        scene.add(sunLight);
+
+        // --- ENVIRONMENT ---
+        const floorGeo = new THREE.PlaneGeometry(WORLD_SIZE * 2, WORLD_SIZE * 2);
+        const floorMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const grid = new THREE.GridHelper(WORLD_SIZE * 2, 20, 0x4444ff, 0x222244);
+        scene.add(grid);
+
+        // Wall setup
+        function createWall(x, z, w, h, d) {
+            const wallGeo = new THREE.BoxGeometry(w, h, d);
+            const wallMat = new THREE.MeshPhongMaterial({ color: 0x555577 });
+            const mesh = new THREE.Mesh(wallGeo, wallMat);
+            mesh.position.set(x, h/2, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            return mesh;
+        }
+
+        const walls = [
+            createWall(0, WORLD_SIZE, WORLD_SIZE * 2, 10, 2),
+            createWall(0, -WORLD_SIZE, WORLD_SIZE * 2, 10, 2),
+            createWall(WORLD_SIZE, 0, 2, 10, WORLD_SIZE * 2),
+            createWall(-WORLD_SIZE, 0, 2, 10, WORLD_SIZE * 2),
+            createWall(20, 20, 10, 5, 10),
+            createWall(-30, 10, 5, 5, 20),
+            createWall(10, -40, 20, 5, 5)
+        ];
+
+        // --- ACTORS ---
+        class Bullet {
+            constructor(pos, angle, color) {
+                const geo = new THREE.SphereGeometry(0.2);
+                const mat = new THREE.MeshBasicMaterial({ color: color });
+                this.mesh = new THREE.Mesh(geo, mat);
+                this.mesh.position.copy(pos);
+                this.velocity = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle)).multiplyScalar(BULLET_SPEED);
+                this.active = true;
+                scene.add(this.mesh);
+            }
+            update() {
+                this.mesh.position.add(this.velocity);
+                if (this.mesh.position.length() > WORLD_SIZE * 1.5) this.destroy();
+            }
+            destroy() {
+                this.active = false;
+                scene.remove(this.mesh);
+            }
+        }
+
+        class Tank {
+            constructor(x, z, color, type) {
+                this.type = type;
+                this.group = new THREE.Group();
+                this.group.position.set(x, 0.5, z);
+
+                // Body
+                const body = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 3), new THREE.MeshPhongMaterial({ color }));
+                body.castShadow = true;
+                this.group.add(body);
+
+                // Turret
+                this.turret = new THREE.Group();
+                const turretBase = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 1.2), new THREE.MeshPhongMaterial({ color }));
+                turretBase.position.y = 0.8;
+                this.turret.add(turretBase);
+
+                const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2), new THREE.MeshPhongMaterial({ color: 0x333333 }));
+                barrel.rotation.x = Math.PI / 2;
+                barrel.position.set(0, 0.8, 1.5);
+                this.turret.add(barrel);
+
+                this.group.add(this.turret);
+                scene.add(this.group);
+
+                this.velocity = 0;
+                this.angle = 0;
+                this.armor = 100;
+                this.lastShot = 0;
+                this.bullets = [];
+            }
+
+            update() {
+                this.group.position.x += Math.sin(this.angle) * this.velocity;
+                this.group.position.z += Math.cos(this.angle) * this.velocity;
+                this.group.rotation.y = this.angle;
+
+                this.bullets.forEach(b => b.update());
+                this.bullets = this.bullets.filter(b => b.active);
+            }
+
+            fire() {
+                const now = Date.now();
+                if (now - this.lastShot > 1000) {
+                    const pos = new THREE.Vector3();
+                    this.group.getWorldPosition(pos);
+                    pos.y += 0.8;
+                    const bullet = new Bullet(pos, this.angle, 0xffff00);
+                    this.bullets.push(bullet);
+                    this.lastShot = now;
+                }
+            }
+
+            takeDamage(dmg) {
+                this.armor -= dmg;
+                if (this.armor <= 0) this.destroy();
+            }
+
+            destroy() {
+                scene.remove(this.group);
+                this.dead = true;
+            }
+        }
+
+        const player = new Tank(0, 40, 0x228B22, 'player');
+        const teammates = [new Tank(-10, 40, 0x4169E1, 'teammate')];
+        const enemies = [new Tank(0, -40, 0xDC143C, 'enemy')];
+
+        // --- CONTROLS ---
+        const keys = {};
+        window.addEventListener('keydown', (e) => keys[e.code] = true);
+        window.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        let score = 0;
+        const scoreEl = document.getElementById('score');
+        const armorEl = document.getElementById('armor');
+
+        // --- GAME LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!player.dead) {
+                if (keys['KeyW']) player.velocity = TANK_SPEED;
+                else if (keys['KeyS']) player.velocity = -TANK_SPEED;
+                else player.velocity = 0;
+
+                if (keys['KeyA']) player.angle += TANK_TURN_SPEED;
+                if (keys['KeyD']) player.angle -= TANK_TURN_SPEED;
+
+                if (keys['Space']) player.fire();
+
+                player.update();
+
+                // Camera follow
+                const camOffset = new THREE.Vector3(-Math.sin(player.angle) * 10, 8, -Math.cos(player.angle) * 10);
+                camera.position.copy(player.group.position).add(camOffset);
+                camera.lookAt(player.group.position);
+
+                armorEl.innerText = Math.max(0, player.armor);
+            }
+
+            // AI Update
+            enemies.forEach(e => {
+                if (e.dead) return;
+                // Simple follow player AI
+                const dx = player.group.position.x - e.group.position.x;
+                const dz = player.group.position.z - e.group.position.z;
+                const targetAngle = Math.atan2(dx, dz);
+
+                if (Math.abs(e.angle - targetAngle) > 0.1) {
+                    e.angle += (targetAngle > e.angle ? 1 : -1) * 0.02;
+                }
+                e.velocity = TANK_SPEED * 0.6;
+                e.update();
+                if (Math.random() < 0.005) e.fire();
+
+                // Check collision with player bullets
+                player.bullets.forEach(b => {
+                    if (b.mesh.position.distanceTo(e.group.position) < 1.5) {
+                        e.takeDamage(50);
+                        b.destroy();
+                        if (e.dead) {
+                            score += 100;
+                            scoreEl.innerText = score;
+                            setTimeout(() => {
+                                e.dead = false;
+                                e.armor = 100;
+                                e.group.position.set(Math.random()*40-20, 0.5, -40);
+                                scene.add(e.group);
+                            }, 3000);
+                        }
+                    }
+                });
+            });
+
+            teammates.forEach(t => {
+                if (t.dead) return;
+                // Follow enemy or player
+                const target = enemies[0] ? enemies[0].group.position : player.group.position;
+                const dx = target.x - t.group.position.x;
+                const dz = target.z - t.group.position.z;
+                const targetAngle = Math.atan2(dx, dz);
+                t.angle += (targetAngle - t.angle) * 0.05;
+                t.velocity = TANK_SPEED * 0.5;
+                t.update();
+                if (enemies[0] && Math.random() < 0.01) t.fire();
+            });
+
+            // Bullet collisions on player
+            [...enemies, ...teammates].forEach(other => {
+                other.bullets.forEach(b => {
+                    if (b.mesh.position.distanceTo(player.group.position) < 1.5 && other.type === 'enemy') {
+                        player.takeDamage(10);
+                        b.destroy();
+                    }
+                });
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
